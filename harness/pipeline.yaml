@@ -1,0 +1,107 @@
+# Reference pipeline. Easiest path: build it in the Harness UI (Pipeline Studio),
+# then switch to YAML view and compare with this. Identifiers below must match
+# the connectors / service / environment / infra you create in your project.
+pipeline:
+  name: devops-demo
+  identifier: devops_demo
+  projectIdentifier: devops_lab
+  orgIdentifier: default
+  properties:
+    ci:
+      codebase:
+        connectorRef: github_conn
+        repoName: devops-demo
+        build: <+input>
+  stages:
+    # ---------- STAGE 1: CI (build, test, push image) ----------
+    - stage:
+        name: Build
+        identifier: Build
+        type: CI
+        spec:
+          cloneCodebase: true
+          platform:
+            os: Linux
+            arch: Amd64
+          runtime:
+            type: Cloud          # Harness-hosted build VM (free tier)
+            spec: {}
+          execution:
+            steps:
+              - step:
+                  type: Run
+                  name: Unit Tests
+                  identifier: Unit_Tests
+                  spec:
+                    shell: Sh
+                    command: |
+                      cd app
+                      pip install -r requirements.txt
+                      python -m pytest -q
+              - step:
+                  type: BuildAndPushDockerRegistry
+                  name: Build and Push
+                  identifier: Build_and_Push
+                  spec:
+                    connectorRef: dockerhub_conn
+                    repo: YOUR_DOCKERHUB_USER/devops-demo
+                    tags:
+                      - <+pipeline.sequenceId>
+                      - latest
+    # ---------- STAGE 2: CD (deploy to minikube via delegate) ----------
+    - stage:
+        name: Deploy Dev
+        identifier: Deploy_Dev
+        type: Deployment
+        spec:
+          deploymentType: Kubernetes
+          service:
+            serviceRef: devops_demo_svc
+            serviceInputs:
+              serviceDefinition:
+                type: Kubernetes
+                spec:
+                  artifacts:
+                    primary:
+                      primaryArtifactRef: dockerhub_image
+                      sources:
+                        - identifier: dockerhub_image
+                          type: DockerRegistry
+                          spec:
+                            tag: <+pipeline.sequenceId>
+          environment:
+            environmentRef: dev
+            deployToAll: false
+            infrastructureDefinitions:
+              - identifier: minikube_demo
+          execution:
+            steps:
+              - step:
+                  name: Rolling Deployment
+                  identifier: rollingDeployment
+                  type: K8sRollingDeploy
+                  timeout: 10m
+                  spec:
+                    skipDryRun: false
+              - step:
+                  name: Smoke Test
+                  identifier: Smoke_Test
+                  type: ShellScript
+                  timeout: 5m
+                  spec:
+                    shell: Bash
+                    onDelegate: true
+                    source:
+                      type: Inline
+                      spec:
+                        script: |
+                          kubectl -n demo rollout status deploy/devops-demo-v1 --timeout=120s
+                          kubectl -n demo run smoke --rm -i --restart=Never --image=curlimages/curl -- \
+                            curl -sf http://devops-demo/health
+            rollbackSteps:
+              - step:
+                  name: Rollback
+                  identifier: rollingRollback
+                  type: K8sRollingRollback
+                  timeout: 10m
+                  spec: {}

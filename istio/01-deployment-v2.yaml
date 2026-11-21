@@ -1,0 +1,37 @@
+# Version 2 of the app (green page). Same Service selects both v1 and v2.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: devops-demo-v2
+  namespace: demo
+  labels:
+    app: devops-demo
+    version: v2
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: devops-demo
+      version: v2
+  template:
+    metadata:
+      labels:
+        app: devops-demo
+        version: v2
+    spec:
+      containers:
+        - name: app
+          image: devops-demo:v2
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+          env:
+            - name: APP_VERSION
+              value: "v2"
+            - name: APP_COLOR
+              value: "#1e9e5a"
+          resources:
+            requests: { cpu: 100m, memory: 128Mi }
+            limits: { cpu: 500m, memory: 256Mi }
+          readinessProbe:
+            httpGet: { path: /health, port: 8080 }

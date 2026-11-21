@@ -1,0 +1,7 @@
+# Harness resolves these expressions at deploy time.
+name: devops-demo-v1
+namespace: <+infra.namespace>
+replicas: 2
+image: <+artifacts.primary.image>
+version: v1
+color: "#2b7de9"
