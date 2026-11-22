@@ -1,0 +1,6 @@
+service:
+  name: devops_demo_svc
+  identifier: devops_demo_svc
+  serviceDefinition:
+    type: Kubernetes
+    spec: {}
